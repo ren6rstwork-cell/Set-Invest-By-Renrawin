@@ -4,34 +4,35 @@ pipeline {
     stages {
         stage('Deploy Full-Stack System') {
             steps {
-                echo '🚀 สั่งรันระบบ Full-Stack พร้อมปลดสิทธิ์ระดับโฟลเดอร์ให้ Apache เข้าถึงได้...'
+                echo '🚀 สั่งรันระบบ Full-Stack แบบเมาท์สิทธิ์ตรงเข้าโครงสร้างหลัก...'
                 
                 sh '''
-                # 1. ล้างตู้เก่าออกไปก่อน
+                # 1. เคลียร์ตู้เก่าที่ค้างอยู่ทิ้งไป
                 docker rm -f sibr-web-container sibr-db-container || true
                 
-                # 2. รัน MySQL ดึงไฟล์ sql ผ่านตัวแปร ${WORKSPACE} ที่ Jenkins กำหนดให้จริง
+                # 2. รัน MySQL ดึงไฟล์ sql ไปรอไว้ที่จุด Init
                 docker run -d --name sibr-db-container --network sibr-net \
                   -e MYSQL_ROOT_PASSWORD=root_password \
                   -e MYSQL_DATABASE=invest_db \
                   -p 3306:3306 \
                   --volumes-from jenkins \
                   -v jenkins_home:/var/jenkins_home \
-                  mysql:8.0 bash -c "sleep 3 && cp ${WORKSPACE}/database.sql /docker-entrypoint-initdb.d/ && docker-entrypoint.sh mysqld"
+                  mysql:8.0 bash -c "sleep 2 && cp ${WORKSPACE}/database.sql /docker-entrypoint-initdb.d/ && docker-entrypoint.sh mysqld"
                 
-                # 3. รัน PHP Web โดยเปิดสิทธิ์ให้เข้าถึงโฟลเดอร์ Workspace ได้ 100%
+                # 3. รัน PHP Web โดยดึงเนื้อหาจาก Workspace ใน Jenkins ไปครอบลงโฟลเดอร์ของ Apache ตรงๆ
                 docker run -d --name sibr-web-container --network sibr-net \
                   -p 8000:80 \
                   --volumes-from jenkins \
                   -v jenkins_home:/var/jenkins_home \
-                  -w ${WORKSPACE} \
-                  php:8.1-apache bash -c "chmod -R 755 ${WORKSPACE} && sed -i 's|/var/www/html|${WORKSPACE}|g' /etc/apache2/sites-available/000-default.conf && echo '<Directory ${WORKSPACE}> \\n Options Indexes FollowSymLinks \\n AllowOverride All \\n Require all granted \\n</Directory>' >> /etc/apache2/apache2.conf && apache2-foreground"
+                  -v ${WORKSPACE}:/var/www/html \
+                  php:8.1-apache
                   
-                # 4. เรียกเปิดใช้งาน Extension ฐานข้อมูล
+                # 4. รอระบบเว็บนิ่ง แล้วสั่งเปิดไดรเวอร์และปลดสิทธิ์ให้อ่านไฟล์ได้ทันที
                 sleep 5
-                docker exec sibr-web-container bash -c "docker-php-ext-enable mysqli pdo_mysql || (apt-get update && apt-get install -y libmariadb-dev && docker-php-ext-install mysqli pdo pdo_mysql)"
+                docker exec sibr-web-container chmod -R 777 /var/www/html
+                docker exec sibr-web-container bash -c "docker-php-ext-install mysqli pdo pdo_mysql && docker-php-ext-enable mysqli pdo_mysql"
                 
-                # 5. รีสตาร์ตตู้เว็บเพื่อให้มั่นใจว่าคอนฟิกใหม่ถูกนำไปใช้
+                # 5. รีสตาร์ตตู้เว็บเพื่อให้ระบบทั้งหมดเริ่มทำงานแบบสมบูรณ์
                 docker restart sibr-web-container
                 '''
             }
