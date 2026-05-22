@@ -4,7 +4,7 @@ pipeline {
     stages {
         stage('Deploy Full-Stack System') {
             steps {
-                echo '🚀 สั่งรันระบบ Full-Stack ผ่านพาธไดนามิกที่ถูกต้อง...'
+                echo '🚀 สั่งรันระบบ Full-Stack พร้อมปลดสิทธิ์ระดับโฟลเดอร์ให้ Apache เข้าถึงได้...'
                 
                 sh '''
                 # 1. ล้างตู้เก่าออกไปก่อน
@@ -19,19 +19,19 @@ pipeline {
                   -v jenkins_home:/var/jenkins_home \
                   mysql:8.0 bash -c "sleep 3 && cp ${WORKSPACE}/database.sql /docker-entrypoint-initdb.d/ && docker-entrypoint.sh mysqld"
                 
-                # 3. รัน PHP Web โดยให้ชี้ DocumentRoot ไปที่ตัวแปร ${WORKSPACE} จริงของรอบนั้นๆ
+                # 3. รัน PHP Web โดยเปิดสิทธิ์ให้เข้าถึงโฟลเดอร์ Workspace ได้ 100%
                 docker run -d --name sibr-web-container --network sibr-net \
                   -p 8000:80 \
                   --volumes-from jenkins \
                   -v jenkins_home:/var/jenkins_home \
                   -w ${WORKSPACE} \
-                  php:8.1-apache bash -c "sed -i 's|/var/www/html|${WORKSPACE}|g' /etc/apache2/sites-available/000-default.conf && apache2-foreground"
+                  php:8.1-apache bash -c "chmod -R 755 ${WORKSPACE} && sed -i 's|/var/www/html|${WORKSPACE}|g' /etc/apache2/sites-available/000-default.conf && echo '<Directory ${WORKSPACE}> \\n Options Indexes FollowSymLinks \\n AllowOverride All \\n Require all granted \\n</Directory>' >> /etc/apache2/apache2.conf && apache2-foreground"
                   
                 # 4. เรียกเปิดใช้งาน Extension ฐานข้อมูล
                 sleep 5
                 docker exec sibr-web-container bash -c "docker-php-ext-enable mysqli pdo_mysql || (apt-get update && apt-get install -y libmariadb-dev && docker-php-ext-install mysqli pdo pdo_mysql)"
                 
-                # 5. รีสตาร์ตตู้เว็บเพื่อเคลียร์คอนฟิก
+                # 5. รีสตาร์ตตู้เว็บเพื่อให้มั่นใจว่าคอนฟิกใหม่ถูกนำไปใช้
                 docker restart sibr-web-container
                 '''
             }
