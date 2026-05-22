@@ -1,13 +1,11 @@
 <?php
-$servername = "localhost";
+$servername = "sibr-db-container";
 $username = "root";
-$password = "";
-$dbname = "setinvest_db";
+$password = "root_password";
+$dbname = "invest_db";
 
-// Create connection
 $conn = mysqli_connect($servername, $username, $password, $dbname);
 
-// Check connection
 if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
